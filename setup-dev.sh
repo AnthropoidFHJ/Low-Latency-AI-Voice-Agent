@@ -48,11 +48,6 @@ check_requirements() {
         exit 1
     fi
     
-    # Check Docker
-    if ! command -v docker &> /dev/null; then
-        print_warning "Docker not found. Container deployment will not be available"
-    fi
-    
     print_status "System requirements check completed"
 }
 
