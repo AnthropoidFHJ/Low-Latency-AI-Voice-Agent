@@ -6,7 +6,7 @@
 
 ---
 
-🌟 **Key Features**
+**Key Features**
 
 * **Ultra-Low Latency**: Sub-500ms voice-to-voice response time
 * **Real-time Audio Streaming**: Direct audio processing with Pipecat AI framework
@@ -18,7 +18,7 @@
 
 ---
 
-🔧 **Key Technologies**
+**Key Technologies**
 
 * **Backend**: Python (FastAPI, Pipecat AI, Google Gemini Live, WebSocket)
 * **Frontend**: Next.js 14, TypeScript, Tailwind CSS, Framer Motion
@@ -82,7 +82,7 @@ Visit: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-🎤 **Usage**
+**Usage**
 
 1. **Start**: Click microphone or say "Hello"
 2. **Forms**: "Open contact form", "My name is John", "Submit form"
@@ -91,7 +91,7 @@ Visit: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-🔍 **API Endpoints**
+**API Endpoints**
 
 - `GET /health` - System health and metrics
 - `POST /api/voice/session` - Create voice session
@@ -100,11 +100,11 @@ Visit: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-🐛 **Troubleshooting**
+**Troubleshooting**
 
-**High Latency**: Check network, API key, WebSocket connection
-**Audio Issues**: Grant microphone permissions, try Chrome/Edge
-**Connection Failed**: Ensure backend on port 8000, check CORS
+**High Latency**: Check network, API key, WebSocket connection  
+**Audio Issues**: Grant microphone permissions, try Chrome/Edge  
+**Connection Failed**: Ensure backend on port 8000, check CORS  
 
 ---
 
