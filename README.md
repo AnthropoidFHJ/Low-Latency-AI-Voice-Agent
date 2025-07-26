@@ -238,7 +238,7 @@ python -m pytest tests/test_performance.py -v
 - `GET /api/forms/templates` - Available form templates
 - `GET /api/metrics` - Performance metrics
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -275,27 +275,8 @@ export LOG_LEVEL=DEBUG
 export NEXT_PUBLIC_DEBUG_MODE=true
 ```
 
-## 🤝 Contributing
 
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open Pull Request
-
-### Development Guidelines
-
-- Follow PEP 8 for Python code
-- Use TypeScript for all frontend components
-- Add tests for new features
-- Update documentation
-- Ensure <500ms latency performance
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Google Gemini Live API** for native audio processing
 - **FastAPI** for high-performance backend framework
