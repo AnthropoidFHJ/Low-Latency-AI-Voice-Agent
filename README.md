@@ -108,10 +108,10 @@ Visit: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-**This project demonstrates cutting-edge real-time voice AI technology, focusing on ultra-low latency conversational experiences through advanced audio processing and AI integration.**
+**This project was developed as an intern task for Empowering Energy, demonstrating cutting-edge real-time voice AI technology with ultra-low latency conversational experiences.**
 
 ---
 
 **Author:** Ferdous Hasan  
-**Date:** July 27, 2025
+**Date:** July 26, 2025
 
