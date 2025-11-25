@@ -293,20 +293,34 @@ def create_pipeline():
             ai_response = ""
             
             name_patterns = [
-                r"(?:my name is|i am|i'm|call me)\s+([a-zA-Z\s]+?)(?:\.|$|,|\sand)",
-                r"name.*?([A-Z][a-z]+\s+[A-Z][a-z]+)",
-                r"^([A-Z][a-z]+\s+[A-Z][a-z]+)(?:\s|$)"
+                r"(?:my name is|i am|i'm|call me)\s+([a-zA-Z\s]+?)(?:\.|$|,|\sand)",t
+                r"name.*?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+                r"^([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)(?:\s|$|\.)",
+                r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b(?=\s*(?:here|$|\.|,|!|\?))",
+                r"^(?:it's\s+|this\s+is\s+)?([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)$"
             ]
             
-            for pattern in name_patterns:
-                match = re.search(pattern, user_message, re.IGNORECASE)
-                if match:
-                    name = match.group(1).strip()
-                    if len(name.split()) >= 1 and len(name) > 1: 
-                        form_tool.update_field("name", name)
-                        form_updates.append({"action": "field_updated", "field": "name", "value": name})
-                        ai_response = f"Nice to meet you, {name}! Please provide your 11-digit phone number."
-                        break
+            
+            if not form_tool.form_data.get("name"):
+                words = user_message.strip().split()
+                if len(words) <= 3 and not any(word.lower() in ['hello', 'hi', 'hey', 'yes', 'no', 'okay', 'sure', 'phone', 'number', 'job', 'title', 'submit'] for word in words):
+                    potential_name = ' '.join(word.capitalize() for word in words if word.isalpha() and len(word) > 1)
+                    if potential_name and len(potential_name) > 2:
+                        form_tool.update_field("name", potential_name)
+                        form_updates.append({"action": "field_updated", "field": "name", "value": potential_name})
+                        ai_response = f"Nice to meet you, {potential_name}! Please provide your 11-digit phone number."
+           
+            if not form_updates:
+                for pattern in name_patterns:
+                    match = re.search(pattern, user_message, re.IGNORECASE)
+                    if match:
+                        name = match.group(1).strip()
+                        name = ' '.join(word.capitalize() for word in name.split() if word.isalpha())
+                        if len(name) > 1 and not any(word.lower() in ['hello', 'hi', 'hey', 'phone', 'number', 'job', 'title'] for word in name.split()): 
+                            form_tool.update_field("name", name)
+                            form_updates.append({"action": "field_updated", "field": "name", "value": name})
+                            ai_response = f"Nice to meet you, {name}! Please provide your 11-digit phone number."
+                            break
             phone_patterns = [
                 r'(?:phone|number|call)\s*(?:is|:)?\s*([0-9\s\-\(\)\.\+]{11,})',
                 r'([0-9]{11})',  
