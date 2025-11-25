@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    border-color: theme(colors.gray.200);
+  }
+  
+  :root {
+    --background: #ffffff;
+    --foreground: #374151;
+  }
+  
+  body {
+    background: #f9fafb;
+    color: #374151;
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+@layer components {
+  /* Clean, minimal card styling */
+  .glass-card {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  }
+  
+  .glass-button {
+    background: #10a37f;
+    border: none;
+    border-radius: 0.75rem;
+    color: white;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  }
+  
+  .glass-button:hover {
+    background: #0d8968;
+    box-shadow: 0 4px 12px -2px rgba(16, 163, 127, 0.3);
+    transform: translateY(-1px);
+  }
+  
+  .glass-button:active {
+    background: #0d8968;
+    transform: translateY(0);
+  }
+  
+  .glass-button.recording {
+    background: #ef4444;
+    animation: pulse 2s infinite;
+  }
+  
+  .glass-button.recording:hover {
+    background: #dc2626;
+  }
+  
+  /* Clean background and text */
+  .gradient-bg {
+    background: #f9fafb;
+  }
+  
+  .gradient-text {
+    color: #1f2937;
+    font-weight: 600;
+  }
+  
+  /* Voice status indicator */
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+  }
+  
+  .status-connected {
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  }
+  
+  .status-recording {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+    animation: pulse 1.5s infinite;
+  }
+  
+  .status-disconnected {
+    background: #9ca3af;
+  }
+  
+  /* Audio visualizer */
+  .audio-bar {
+    background: #10a37f;
+    border-radius: 2px;
+    transition: height 0.1s ease;
+  }
+  
+  /* Response bubble */
+  .response-bubble {
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 1rem;
+    padding: 1rem;
+    margin: 0.5rem 0;
+  }
+  
+  .user-bubble {
+    background: #10a37f;
+    color: white;
+    border-radius: 1rem;
+    padding: 1rem;
+    margin: 0.5rem 0;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes audioWave {
+  0%, 100% { height: 20%; }
+  25% { height: 60%; }
+  50% { height: 100%; }
+  75% { height: 40%; }
+}
+
