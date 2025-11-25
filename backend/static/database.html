@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>User Database - Voice Agent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Voice Agent Database</h1>
+        
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <h3 id="total-users">0</h3>
+                <p>Total Users</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="today-users">0</h3>
+                <p>Today's Registrations</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="total-sessions">0</h3>
+                <p>Total Sessions</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="searchInput" class="search-box" placeholder="Search users by name, email, phone...">
+            <button class="btn btn-primary" onclick="loadUsers()">
+                Refresh
+            </button>
+            <button class="btn btn-secondary" onclick="exportData()">
+                Export
+            </button>
+        </div>
+
+        <div id="error-display" class="error" style="display: none;"></div>
+
+        <div id="users-container">
+            <div class="loading">Loading user data...</div>
+        </div>
+    </div>
+
+    <script>
+        let allUsers = [];
+        
+        async function loadStats() {
+            try {
+                const response = await fetch('/stats');
+                const stats = await response.json();
+                
+                document.getElementById('total-users').textContent = stats.total_users;
+                document.getElementById('today-users').textContent = stats.users_today;
+                document.getElementById('total-sessions').textContent = stats.total_sessions;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                showError('Failed to load statistics');
+            }
+        }
+        
+        async function loadUsers() {
+            try {
+                hideError();
+                const usersContainer = document.getElementById('users-container');
+                usersContainer.innerHTML = '<div class="loading">Loading user data...</div>';
+                
+                const response = await fetch('/users');
+                const data = await response.json();
+                allUsers = data.users || [];
+                
+                displayUsers(allUsers);
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showError('Failed to load user data. Please check if the backend server is running.');
+                document.getElementById('users-container').innerHTML = 
+                    '<div class="empty-state"><h3>Connection Error</h3><p>Unable to load user data</p></div>';
+            }
+        }
+
+        function displayUsers(users) {
+            const container = document.getElementById('users-container');
+            
+            if (users.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No Users Found</h3>
+                        <p>No user data available at the moment.</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            let tableHTML = `
+                <table class="users-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Job Title</th>
+                            <th>Registered</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            users.forEach(user => {
+                const registeredDate = new Date(user.created_at).toLocaleString();
+                tableHTML += `
+                    <tr>
+                        <td><span class="user-id">#${user.id}</span></td>
+                        <td><span class="user-name">${user.name || 'N/A'}</span></td>
+                        <td>${user.email || 'N/A'}</td>
+                        <td><span class="phone">${user.phone || 'N/A'}</span></td>
+                        <td><span class="job-title">${user.job_title || 'N/A'}</span></td>
+                        <td><span class="date-time">${registeredDate}</span></td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+        
+        function searchUsers() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (searchTerm === '') {
+                displayUsers(allUsers);
+                return;
+            }
+            
+            const filteredUsers = allUsers.filter(user => {
+                return (
+                    (user.name && user.name.toLowerCase().includes(searchTerm)) ||
+                    (user.email && user.email.toLowerCase().includes(searchTerm)) ||
+                    (user.phone && user.phone.toLowerCase().includes(searchTerm)) ||
+                    (user.job_title && user.job_title.toLowerCase().includes(searchTerm))
+                );
+            });
+            
+            displayUsers(filteredUsers);
+        }
+
+        function exportData() {
+            if (allUsers.length === 0) {
+                showError('No data to export');
+                return;
+            }
+            
+            const csvContent = convertToCSV(allUsers);
+            downloadCSV(csvContent, 'voice_agent_users.csv');
+        }
+        
+        function convertToCSV(data) {
+            const headers = ['ID', 'Name', 'Email', 'Phone', 'Job Title', 'Created At'];
+            const csvHeaders = headers.join(',');
+            
+            const csvRows = data.map(user => {
+                return [
+                    user.id,
+                    `"${user.name || ''}"`,
+                    `"${user.email || ''}"`,
+                    `"${user.phone || ''}"`,
+                    `"${user.job_title || ''}"`,
+                    `"${user.created_at || ''}"`
+                ].join(',');
+            });
+            
+            return csvHeaders + '\n' + csvRows.join('\n');
+        }
+
+        function downloadCSV(csvContent, filename) {
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('hidden', '');
+            a.setAttribute('href', url);
+            a.setAttribute('download', filename);
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-display');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function hideError() {
+            document.getElementById('error-display').style.display = 'none';
+        }
+        
+        document.getElementById('searchInput').addEventListener('input', searchUsers);
+
+        window.addEventListener('load', function() {
+            loadStats();
+            loadUsers();
+        });
+
+        setInterval(() => {
+            loadStats();
+        }, 30000);
+    </script>
+</body>
+</html>

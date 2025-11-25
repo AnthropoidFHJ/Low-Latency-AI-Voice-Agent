@@ -2,9 +2,11 @@ import os
 import asyncio
 import json
 import logging
+import uuid
 from typing import AsyncGenerator, Dict, Any
 from fastapi import WebSocket
 from dotenv import load_dotenv
+from database import db
 
 load_dotenv()
 
@@ -25,15 +27,22 @@ class FormTool:
         self.form_data = {}
         self.form_active = False
         self.fields = ['name', 'phone', 'jobTitle']
+        self.session_id = str(uuid.uuid4())
         
     def open_form(self) -> Dict[str, Any]:
         self.form_active = True
         self.form_data = {field: "" for field in self.fields}
+        self.session_id = str(uuid.uuid4())
+        
+        # Save initial form session to database
+        db.save_form_session(self.session_id, self.form_data, "in_progress")
+        
         return {
             "action": "form_opened",
             "message": "Form opened! I'll collect your name, phone number, and job title.",
             "fields": self.fields,
-            "data": self.form_data
+            "data": self.form_data,
+            "session_id": self.session_id
         }
     
     def update_field(self, field: str, value: str) -> Dict[str, Any]:
@@ -42,12 +51,17 @@ class FormTool:
         
         if field in self.fields:
             self.form_data[field] = value
+            
+            # Update form session in database
+            db.save_form_session(self.session_id, self.form_data, "in_progress")
+            
             return {
                 "action": "field_updated",
                 "field": field,
                 "value": value,
                 "message": f"Updated {field} to {value}",
-                "data": self.form_data
+                "data": self.form_data,
+                "session_id": self.session_id
             }
         else:
             return {"action": "error", "message": f"Unknown field: {field}"}
@@ -55,6 +69,7 @@ class FormTool:
     def submit_form(self) -> Dict[str, Any]:
         if not self.form_active:
             return {"action": "error", "message": "No form is currently open."}
+        
         required_fields = ['name', 'phone', 'jobTitle']
         missing_fields = [field for field in required_fields if not self.form_data.get(field)]
         
@@ -65,15 +80,45 @@ class FormTool:
                 "missing_fields": missing_fields
             }
         
-        result = self.form_data.copy()
-        self.form_active = False
-        self.form_data = {}
-        
-        return {
-            "action": "form_submitted",
-            "message": "Form submitted successfully! Thank you for providing your information.",
-            "submitted_data": result
-        }
+        try:
+            # Save user data to database
+            user_id = db.save_user_data(
+                name=self.form_data['name'],
+                phone=self.form_data['phone'],
+                job_title=self.form_data['jobTitle'],
+                session_data={
+                    "session_id": self.session_id,
+                    "form_data": self.form_data,
+                    "submitted_at": str(asyncio.get_event_loop().time())
+                }
+            )
+            
+            # Complete form session in database
+            db.complete_form_session(self.session_id, user_id)
+            
+            result = self.form_data.copy()
+            result["user_id"] = user_id
+            result["session_id"] = self.session_id
+            
+            self.form_active = False
+            self.form_data = {}
+            
+            return {
+                "action": "form_submitted",
+                "message": "Form submitted successfully! Thank you for providing your information.",
+                "submitted_data": result,
+                "user_id": user_id,
+                "session_id": self.session_id,
+                "database_saved": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Database error during form submission: {e}")
+            return {
+                "action": "error",
+                "message": "Form data collected but database error occurred. Please try again.",
+                "error_details": str(e)
+            }
 
 class VoiceAgentProcessor(FrameProcessor):
     def __init__(self):
@@ -292,16 +337,32 @@ def create_pipeline():
             form_updates = []
             ai_response = ""
             
-            name_patterns = [
-                r"(?:my name is|i am|i'm|call me)\s+([a-zA-Z\s]+?)(?:\.|$|,|\sand)",t
-                r"name.*?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
-                r"^([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)(?:\s|$|\.)",
-                r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b(?=\s*(?:here|$|\.|,|!|\?))",
-                r"^(?:it's\s+|this\s+is\s+)?([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)$"
-            ]
+            # Check if all fields are already filled
+            all_filled = all(form_tool.form_data.get(field) for field in form_tool.fields)
             
+            # Handle submission requests first
+            if "submit" in message or "yes" in message or "sure" in message or "confirm" in message:
+                if all_filled:
+                    result = form_tool.submit_form()
+                    ai_response = "Form submitted successfully! Thank you for providing your information."
+                    form_updates.append({"action": "form_submitted", "data": result})
+                    return ai_response, form_updates
+                else:
+                    missing = [field for field in form_tool.fields if not form_tool.form_data.get(field)]
+                    ai_response = f"Please provide the following information first: {', '.join(missing)}"
+                    return ai_response, form_updates
             
+            # Process name only if not already captured
             if not form_tool.form_data.get("name"):
+                name_patterns = [
+                    r"(?:my name is|i am|i'm|call me)\s+([a-zA-Z\s]+?)(?:\.|$|,|\sand)",
+                    r"name.*?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+                    r"^([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)(?:\s|$|\.)",
+                    r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)\b(?=\s*(?:here|$|\.|,|!|\?))",
+                    r"^(?:it's\s+|this\s+is\s+)?([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})?)$"
+                ]
+                
+                # Special case for very short messages that are likely just names
                 words = user_message.strip().split()
                 if len(words) <= 3 and not any(word.lower() in ['hello', 'hi', 'hey', 'yes', 'no', 'okay', 'sure', 'phone', 'number', 'job', 'title', 'submit'] for word in words):
                     potential_name = ' '.join(word.capitalize() for word in words if word.isalpha() and len(word) > 1)
@@ -309,8 +370,9 @@ def create_pipeline():
                         form_tool.update_field("name", potential_name)
                         form_updates.append({"action": "field_updated", "field": "name", "value": potential_name})
                         ai_response = f"Nice to meet you, {potential_name}! Please provide your 11-digit phone number."
-           
-            if not form_updates:
+                        return ai_response, form_updates
+                
+                # Regular pattern matching for names
                 for pattern in name_patterns:
                     match = re.search(pattern, user_message, re.IGNORECASE)
                     if match:
@@ -320,59 +382,62 @@ def create_pipeline():
                             form_tool.update_field("name", name)
                             form_updates.append({"action": "field_updated", "field": "name", "value": name})
                             ai_response = f"Nice to meet you, {name}! Please provide your 11-digit phone number."
-                            break
-            phone_patterns = [
-                r'(?:phone|number|call)\s*(?:is|:)?\s*([0-9\s\-\(\)\.\+]{11,})',
-                r'([0-9]{11})',  
-                r'([0-9]{1}[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{4})',  
-                r'(\+?1[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{4})'
-            ]
+                            return ai_response, form_updates
             
-            for pattern in phone_patterns:
-                match = re.search(pattern, user_message, re.IGNORECASE)
-                if match:
-                    phone_raw = match.group(1)
-                    phone = re.sub(r'[^0-9]', '', phone_raw)
-                    if len(phone) == 11:
-                        formatted_phone = f"{phone[:5]}-{phone[5:]}"
-                        
-                        form_tool.update_field("phone", formatted_phone)
-                        form_updates.append({"action": "field_updated", "field": "phone", "value": formatted_phone})
-                        ai_response = "Great! Now, what's your job title?"
-                        break
-            job_patterns = [
-                r"(?:job title is|work as|i am a|my job is|position is)\s+([a-zA-Z\s]+?)(?:\.|$|,|\sand)",
-                r"(?:engineer|developer|manager|analyst|designer|consultant|specialist|coordinator|director|lead)\b([a-zA-Z\s]*)",
-                r"([A-Z][a-z]+\s+[A-Z][a-z]+)\s*(?:engineer|developer|manager|analyst)",
-                r"(AI|ML|Data|Software|Web|Mobile|Full[\s-]?Stack|DevOps|Cloud)\s+[A-Za-z]+"
-            ]
+            # Process phone only if not already captured and name exists
+            elif not form_tool.form_data.get("phone"):
+                phone_patterns = [
+                    r'(?:phone|number|call)\s*(?:is|:)?\s*([0-9\s\-\(\)\.\+]{11,})',
+                    r'([0-9]{11})',  
+                    r'([0-9]{1}[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{4})',  
+                    r'(\+?1[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{3}[-.\\s]?[0-9]{4})'
+                ]
+                
+                for pattern in phone_patterns:
+                    match = re.search(pattern, user_message, re.IGNORECASE)
+                    if match:
+                        phone_raw = match.group(1)
+                        phone = re.sub(r'[^0-9]', '', phone_raw)
+                        if len(phone) == 11:
+                            formatted_phone = f"{phone[:5]}-{phone[5:]}"
+                            form_tool.update_field("phone", formatted_phone)
+                            form_updates.append({"action": "field_updated", "field": "phone", "value": formatted_phone})
+                            ai_response = "Great! Now, what's your job title?"
+                            return ai_response, form_updates
             
-            for pattern in job_patterns:
-                match = re.search(pattern, user_message, re.IGNORECASE)
-                if match:
-                    job_title = match.group(0 if "engineer" in pattern or "AI|ML" in pattern else 1).strip()
-                    if len(job_title) > 1:  
-                        job_title = ' '.join(word.capitalize() for word in job_title.split())
-                        form_tool.update_field("jobTitle", job_title)
-                        form_updates.append({"action": "field_updated", "field": "jobTitle", "value": job_title})
-                        ai_response = "Perfect! I've collected all your information. Would you like to submit the form?"
-                        break
+            # Process job title only if not already captured and name + phone exist
+            elif not form_tool.form_data.get("jobTitle"):
+                job_patterns = [
+                    r"(?:job title is|work as|i am a|my job is|position is)\s+([a-zA-Z\s]+?)(?:\.|$|,|\sand)",
+                    r"(?:engineer|developer|manager|analyst|designer|consultant|specialist|coordinator|director|lead)\b([a-zA-Z\s]*)",
+                    r"([A-Z][a-z]+\s+[A-Z][a-z]+)\s*(?:engineer|developer|manager|analyst)",
+                    r"(AI|ML|Data|Software|Web|Mobile|Full[\s-]?Stack|DevOps|Cloud)\s+[A-Za-z]+"
+                ]
+                
+                for pattern in job_patterns:
+                    match = re.search(pattern, user_message, re.IGNORECASE)
+                    if match:
+                        job_title = match.group(0 if "engineer" in pattern or "AI|ML" in pattern else 1).strip()
+                        if len(job_title) > 1:  
+                            job_title = ' '.join(word.capitalize() for word in job_title.split())
+                            form_tool.update_field("jobTitle", job_title)
+                            form_updates.append({"action": "field_updated", "field": "jobTitle", "value": job_title})
+                            ai_response = "Perfect! I've collected all your information. Would you like to submit the form?"
+                            return ai_response, form_updates
             
-            if "submit" in message or "yes" in message or "sure" in message or "confirm" in message:
-                if all(form_tool.form_data.get(field) for field in form_tool.fields):
-                    result = form_tool.submit_form()
-                    ai_response = "Form submitted successfully! Thank you for providing your information."
-                    form_updates.append({"action": "form_submitted", "data": result})
-                else:
-                    if not any(form_tool.form_data.get(field) for field in form_tool.fields):
-                        ai_response = "Thanks, would you mind telling me your name?"
+            # Default responses only if no field was updated
+            if not ai_response:
+                if "hello" in message or "hi" in message:
+                    if not form_tool.form_data.get("name"):
+                        ai_response = "Hello! Could you please tell me your name?"
+                    elif not form_tool.form_data.get("phone"):
+                        ai_response = "Please provide your phone number."
+                    elif not form_tool.form_data.get("jobTitle"):
+                        ai_response = "What's your job title?"
                     else:
-                        missing = [field for field in form_tool.fields if not form_tool.form_data.get(field)]
-                        ai_response = f"Please provide the following information first: {', '.join(missing)}"
-            
-            if not form_updates and not ai_response:
-                if "hello" in message or "hi" in message or not form_tool.form_data.get("name"):
-                    ai_response = "Thanks, would you mind telling me your name?"
+                        ai_response = "I have all your information. Would you like to submit the form?"
+                elif not form_tool.form_data.get("name"):
+                    ai_response = "Could you please tell me your name?"
                 elif not form_tool.form_data.get("phone"):
                     ai_response = "Please provide your phone number."
                 elif not form_tool.form_data.get("jobTitle"):

@@ -42,4 +42,5 @@ npm run dev
 
 **Frontend : http://localhost:3000**  
 **Backend  : http://127.0.0.1:8000**  
+**Database : http://127.0.0.1:8000/database**  
 **API      : http://127.0.0.1:8000/docs**  
